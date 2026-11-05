@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const pool = require('./db');
@@ -8,6 +9,23 @@ const app = express();
 
 app.use(cors());          // 允许前端跨域访问，否则浏览器会拦
 app.use(express.json());  // 把请求体里的 JSON 自动解析成 req.body
+
+// ============================================================
+// 静态文件托管：把 public 目录"变成"网站根目录
+//
+// 加了这一行之后：
+//   浏览器访问 /            → 返回 public/index.html
+//   浏览器访问 /login.html  → 返回 public/login.html
+//   浏览器访问 /css/style.css → 返回 public/css/style.css
+//
+// 注意 express.static 用的是**相对路径**，相对的是"启动命令时所在目录"。
+// 所以这里用 __dirname 拼出绝对路径，避免"从别的目录启动就找不到文件"。
+//
+// __dirname  = .../signup-system/src
+// '..'       = .../signup-system
+// 'public'   = .../signup-system/public
+// ============================================================
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use('/api/auth', authRouter);
 app.use('/api', eventsRouter);   // /api/events、/api/my/registrations 等

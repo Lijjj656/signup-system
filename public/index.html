@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>活动列表 · 活动报名</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="nav"></div>
+
+  <main class="wrap">
+    <h1 class="page-title">活动列表</h1>
+    <p class="page-sub">共 <span id="total">—</span> 个活动</p>
+    <div id="list"></div>
+  </main>
+
+  <!-- 顺序不能反：events.js 里用到了 api.js 定义的函数，必须先加载 -->
+  <script src="/js/api.js"></script>
+  <script src="/js/events.js"></script>
+</body>
+</html>

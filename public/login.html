@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 · 活动报名</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="nav"></div>
+
+  <!--
+    为什么用 <form> 包起来，而不是两个 input + 一个 div？
+    因为 form 自带三件免费的东西：
+      1. 回车键提交
+      2. required / type="email" 这些浏览器自带的校验
+      3. 密码框自动打码
+    用 div 都得自己写。
+  -->
+  <form class="form-card" id="authForm" novalidate>
+    <h1 id="formTitle">登录</h1>
+
+    <p class="form-error" id="err"></p>
+
+    <div class="field">
+      <label for="email">邮箱</label>
+      <input id="email" type="email" autocomplete="username" placeholder="you@example.com" required>
+    </div>
+
+    <div class="field">
+      <label for="password">密码</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="至少 8 位" required>
+    </div>
+
+    <button class="btn" type="submit" id="submitBtn">登录</button>
+
+    <p class="form-foot">
+      <span id="switchHint">还没有账号？</span>
+      <a href="#" id="switchMode">注册一个</a>
+    </p>
+  </form>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/login.js"></script>
+</body>
+</html>
