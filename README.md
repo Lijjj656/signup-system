@@ -14,6 +14,22 @@
 
 ---
 
+## 界面
+
+<p align="center">
+  <img src="docs/screenshots/01-events.png" width="49%" alt="活动列表" />
+  <img src="docs/screenshots/04-my-registrations.png" width="49%" alt="我的报名" />
+</p>
+
+左边是活动列表：每个活动带一条进度条和「已报名 / 名额上限 / 剩余名额」，
+其中「小班代码评审」已经 2/2 报满，入口自动置灰；右边登录后只显示自己的报名记录，可取消。
+
+<p align="center">
+  <img src="docs/screenshots/02-login.png" width="58%" alt="登录页" />
+</p>
+
+---
+
 ## 为什么做这个
 
 校园和社群里最常见的报名方式是「微信群接龙」或共享表格，会稳定出现四个问题：
