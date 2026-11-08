@@ -36,7 +36,7 @@
 | 数据库 | PostgreSQL 14/15 | 用它的**事务与行锁**做名额控制，这是本项目核心 |
 | 鉴权 | JWT + bcryptjs | 密码只存 bcrypt 哈希，`$2b$10$...`，不可逆 |
 | 前端 | 原生 HTML / CSS / JS | 3 个页面 + 1 个统一的 fetch 封装，无构建步骤 |
-| 进程守护 | pm2 | 脱离终端常驻，`pm2 save` 后可开机自启 |
+| 进程守护 | systemd + pm2-runtime | 专用系统用户 `signup` 运行，开机自启，进程退出自动重启 |
 | 反向代理 | nginx | 8081 → 3000，与同机另一项目（占 80）按端口隔离 |
 
 **为什么不用框架/ORM**：项目只有 3 张表 9 个接口，ORM 带来的抽象收益低于它遮蔽掉的细节成本。
@@ -180,20 +180,76 @@ node race-test.js 50      # 并发压测：50 个请求抢 1 个名额，预期�
 
 ## 部署
 
-Ubuntu 22.04 + Node 20（NodeSource）+ PostgreSQL 14 + pm2 + nginx：
+Ubuntu 22.04 + Node 20（NodeSource）+ PostgreSQL 14 + pm2 + nginx。
+
+**运行形态**：代码放 `/var/www/signup`，以专用系统用户 `signup` 运行（不碰 root）；
+由 systemd 单元 `pm2-signup.service` 托管，进程管理模式用 `pm2-runtime`（前台常驻）。
 
 ```bash
-# 进程常驻
-pm2 start src/app.js --name signup
-pm2 save
+# 1. 目录与归属
+sudo mkdir -p /var/www/signup
+sudo rsync -a --exclude node_modules ./ /var/www/signup/
+sudo chown -R signup:signup /var/www/signup
+sudo -u signup -H sh -c 'cd /var/www/signup && npm ci --omit=dev'
 
-# 反向代理：/etc/nginx/sites-available/signup → sites-enabled
-# 同机 80 端口已被另一个项目占用，故本项目监听 8081，
-# 由 nginx 转发到 127.0.0.1:3000；两条 server 块按端口共存，互不冲突
+# 2. systemd 单元
+sudo tee /etc/systemd/system/pm2-signup.service > /dev/null <<'EOF'
+[Unit]
+Description=signup: 活动报名系统 (Node.js via pm2-runtime)
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=signup
+Group=signup
+WorkingDirectory=/var/www/signup
+Environment=PM2_HOME=/home/signup/.pm2
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/pm2-runtime start /var/www/signup/src/app.js --name signup
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now pm2-signup
+
+# 3. 反向代理：sites-available/signup → sites-enabled
+#    同机 80 端口已被另一个项目占用，故本项目监听 8081，
+#    由 nginx 转发到 127.0.0.1:3000；两条 server 块按端口共存，互不冲突
 nginx -t && systemctl reload nginx
 
-# 云服务器安全组必须显式放行 8081（见下）
+# 4. 云服务器安全组必须显式放行 8081（见下）
 ```
+
+**为什么不用 `pm2 start` + `pm2 save` 做开机自启**：
+
+`pm2 startup` 生成的 unit 是 `Type=forking` + `PIDFile=$PM2_HOME/pm2.pid`，
+但 PM2 7.x 已经不写这个 pid 文件（`.pm2/` 下只有 `pids/`、`pub.sock`、`rpc.sock`），
+systemd 等不到就判 `protocol` 失败，重试 5 次后熔断成 `failed`。
+三个方案实测：
+
+| 方案 | 结果 |
+|---|---|
+| `Type=forking` + `PIDFile`（pm2 自带） | ❌ 永远 `failed: protocol` |
+| `Type=oneshot` + `RemainAfterExit=yes` | ❌ **假 active**：`resurrect` 返回 0 但进程没起来 |
+| **`Type=simple` + `pm2-runtime`** | ✅ 状态与真实进程一致，进程死则服务死 |
+
+`Type=oneshot` 那条最坑：它只看退出码，`systemctl is-active` 返回 `active`，
+而 `ss -lntp` 里 3000 端口根本没监听、`ps` 里也没有进程。
+**判断服务是否真活着，只能看端口和健康检查，不能看 systemd 状态。**
+
+另外两条实测细节：
+- `pm2 kill` 在 systemd 的 `ExecStop` 里会拒绝执行，日志是
+  `daemon not started by this service, leaving it running` —— 它只杀自己启动的 daemon。
+  `pm2-runtime` 模式不存在这个问题（systemd 直接持有主进程）。
+- 用 `sudo -u <user> pm2 start` 启动时，PM2 会把整个 sudo 环境（`SUDO_UID`、`SUDO_COMMAND`、`OLDPWD`）
+  写进 `dump.pm2`。这种 dump 在 systemd 的干净环境里恢复并不可靠。
 
 **一条踩过的坑**：云服务器安全组里有一条「全部(-1/-1) 允许」的默认规则，
 实测**并不生效** —— 只有显式声明端口的规则才通。判断依据是端口响应的差异：
