@@ -3,7 +3,7 @@
 一个活动报名与名额管理系统：发布活动、限制名额、报名、取消、查看我的报名。
 重点解决 **高并发下的名额超卖** 问题，并完整部署到公网。
 
-**在线演示：<http://47.111.223.71>**
+**在线演示：<http://47.111.223.71:8081>** ｜ **源码：<https://github.com/Lijjj656/signup-system>**
 
 | 角色 | 账号 | 密码 |
 |---|---|---|
@@ -32,12 +32,12 @@
 | 层 | 选型 | 说明 |
 |---|---|---|
 | 运行时 | Node.js 20 | |
-| Web 框架 | Express 4 | 单体应用，四层结构：`app → routes → pg 连接池 → PostgreSQL` |
+| Web 框架 | Express 5 | 单体应用，四层结构：`app → routes → pg 连接池 → PostgreSQL` |
 | 数据库 | PostgreSQL 14/15 | 用它的**事务与行锁**做名额控制，这是本项目核心 |
 | 鉴权 | JWT + bcryptjs | 密码只存 bcrypt 哈希，`$2b$10$...`，不可逆 |
 | 前端 | 原生 HTML / CSS / JS | 3 个页面 + 1 个统一的 fetch 封装，无构建步骤 |
 | 进程守护 | pm2 | 脱离终端常驻，`pm2 save` 后可开机自启 |
-| 反向代理 | nginx | 80 → 3000，对外地址不带端口，为将来 HTTPS 留接入点 |
+| 反向代理 | nginx | 8081 → 3000，与同机另一项目（占 80）按端口隔离 |
 
 **为什么不用框架/ORM**：项目只有 3 张表 9 个接口，ORM 带来的抽象收益低于它遮蔽掉的细节成本。
 名额控制恰恰依赖手写 SQL 的 `SELECT ... FOR UPDATE`，用 ORM 反而要绕出去写原生查询。
@@ -48,7 +48,7 @@
 
 ```
 浏览器（原生 JS + fetch + JWT）
-        │  HTTP :80
+        │  HTTP :8081
         ▼
    nginx（反向代理，透传 X-Real-IP / X-Forwarded-For）
         │  HTTP :3000
@@ -187,9 +187,12 @@ Ubuntu 22.04 + Node 20（NodeSource）+ PostgreSQL 14 + pm2 + nginx：
 pm2 start src/app.js --name signup
 pm2 save
 
-# 反向代理：/etc/nginx/sites-available/signup → sites-enabled，
-# 删掉 sites-enabled/default（否则两条配置抢 80 端口）
+# 反向代理：/etc/nginx/sites-available/signup → sites-enabled
+# 同机 80 端口已被另一个项目占用，故本项目监听 8081，
+# 由 nginx 转发到 127.0.0.1:3000；两条 server 块按端口共存，互不冲突
 nginx -t && systemctl reload nginx
+
+# 云服务器安全组必须显式放行 8081（见下）
 ```
 
 **一条踩过的坑**：云服务器安全组里有一条「全部(-1/-1) 允许」的默认规则，
@@ -202,6 +205,10 @@ nginx -t && systemctl reload nginx
 
 有显式规则的端口（22、3389）能通或返回「拒绝」，只被「全部」规则覆盖的端口（80/443/3000）全部超时
 → 结论：那条规则没生效，需要给每个端口补显式规则。
+
+本项目迁到 8081 后又复核了一次同样的规律：未加规则时外网 `curl` 连接超时（`exit=28`），
+显式添加 `8081/8081` 规则后立即返回 `200`，服务器侧未做任何改动。
+顺带说明：`timeout` 与 `Connection refused` 的区分，是当时判断「包被丢在半路」还是「端口没人监听」的唯一依据。
 
 ---
 
