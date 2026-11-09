@@ -9,8 +9,14 @@
 -- 执行：PGPASSWORD=postgres123 psql -h 127.0.0.1 -U postgres -d signup -f db/seed.server.sql
 --
 -- 账号（都已在下方用 bcrypt 哈希写死，明文不会进库）：
---   admin@demo.com   / admin12345   ← 管理员，可创建活动
+--   admin@demo.com                    ← 管理员，可创建活动。**密码不公开**
 --   demo1@demo.com ~ demo6@demo.com / demo12345
+--
+-- ⚠️ 管理员密码为什么不在仓库里：
+--   这个仓库是公开的，只要明文写在这里，任何人读完 README 就能以 admin 身份
+--   创建活动（`POST /api/events` 有 role 校验，只有 admin 能过）。
+--   所以 admin 的哈希对应的是一段 24 位随机密码，只在部署时单独设置，
+--   不出现在代码与文档中。
 -- ============================================================
 
 begin;
@@ -23,7 +29,7 @@ delete from users;
 -- password_hash 是 bcrypt 哈希，$2b$10$ 是格式标识，后面 53 位是盐+摘要。
 -- 同一个明文每次哈希结果都不同（盐随机），所以这里两段哈希可以反复复用。
 insert into users (email, password_hash, role) values
-  ('admin@demo.com', '$2b$10$hPRHz2LyK.IpJowowmzdtuKVHAuqDCCIjxkqzM8h/0S0XBywI8Bfq', 'admin'),
+  ('admin@demo.com', '$2b$10$ZIAawpYAOGQWTjQ7n/rwq.n9fWQxU3KiOCv6LC4FVwf/4PZqzZ5Uu', 'admin'),
   ('demo1@demo.com', '$2b$10$jBC2SD0dwgZEGpGomjEEYeMUWEppGDb6oskxVPtaOAubXDQxnJpf6', 'user'),
   ('demo2@demo.com', '$2b$10$jBC2SD0dwgZEGpGomjEEYeMUWEppGDb6oskxVPtaOAubXDQxnJpf6', 'user'),
   ('demo3@demo.com', '$2b$10$jBC2SD0dwgZEGpGomjEEYeMUWEppGDb6oskxVPtaOAubXDQxnJpf6', 'user'),
